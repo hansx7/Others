@@ -7,7 +7,7 @@ def init():
     global path, input_num, output_size, result, result_for_csv
     path = './data'
     input_num = 5
-    output_size = 1000
+    output_size = 30
     result = np.zeros((output_size, output_size, 5))
     result_for_csv = np.zeros((output_size, output_size))
     return
@@ -28,27 +28,73 @@ def show_result(result):
                 img[i, j, 0] = 200
             if result[i, j, 1] == 1:
                 img[i, j, 1] = 200
-            if result[i, j, 2] == 1:
-                img[i, j, 2] = 200
             if result[i, j, 3] == 1:
                 img[i, j, 1] = 200
                 img[i, j, 2] = 100
             if result[i, j, 4] == 1:
                 img[i, j, 0] = 200
                 img[i, j, 2] = 100
+            if result[i, j, 2] == 1:
+                img[i, j, 2] = 200
     cv2.imshow('result', img)
     cv2.waitKey(0)
+    cv2.imwrite('./result/result{}.png'.format(output_size), img)
+    return
+
+
+def cut_image(image, height, width):
+    min_x = min_y = 10000
+    max_x = max_y = 0
+    for i in range(height):
+        for j in range(width):
+            image_r, image_g, image_b = image[i, j][0], image[i, j][1], image[i, j][2]
+            if not(image_r == 192 and image_g == 192 and image_b == 192):
+                if min_x > i:
+                    min_x = i
+                if min_y > j:
+                    min_y = j
+                if max_x < i:
+                    max_x = i
+                if max_y < j:
+                    max_y = j
+    img = image[min_x:max_x, min_y:max_y, :]
+    # cv2.imshow('after cut', img)
+    # cv2.waitKey(0)
+    return img, max_x - min_x, max_y - min_y
+
+
+def sample_image(image, length, direction):
+    sampled_points = np.linspace(0, length-1, num=output_size, dtype=int)
+    ratio = length / output_size
+    if direction:
+        width = image.shape[1]
+        sampled_points_another_axis = np.linspace(0, width-1, num=int(width/ratio), dtype=int)
+        img = image[:, sampled_points_another_axis, :]
+        img = img[sampled_points, :, :]
+    else:
+        height = image.shape[0]
+        sampled_points_another_axis = np.linspace(0, height-1, num=int(height/ratio), dtype=int)
+        img = image[:, sampled_points, :]
+        img = img[sampled_points_another_axis, :, :]
+    # cv2.imshow('after sample', img)
+    # cv2.waitKey(0)
+    return img, img.shape[0], img.shape[1]
 
 
 def main():
     for i in range(input_num):
         img_name = '/{}.gif'.format(i+1)
         img, height, width = img_read(img_name)
-        bias_vertical, bias_horizontal = int((output_size - height) / 2), int((output_size - width) / 2)
         # print(height, width)
-        img_backup = img.copy()
-        min_x = min_y = 10000
-        max_x = max_y = 0
+        img_backup, height, width = cut_image(img, height, width)
+        # print(height, width)
+        if output_size < height:
+            img_backup, height, width = sample_image(img_backup, height, True)
+        if output_size < width:
+            img_backup, height, width = sample_image(img_backup, width, False)
+        height, width = img_backup.shape[0], img_backup.shape[1]
+        bias_vertical, bias_horizontal = int((output_size - height) / 2), int((output_size - width) / 2)
+
         # print(img_backup.shape)
         for j in range(height):
             for k in range(width):
@@ -57,20 +103,11 @@ def main():
                     result[j + bias_vertical, k + bias_horizontal, i] = 0
                     result_for_csv[j + bias_vertical, k + bias_horizontal] *= 2
                 else:
-                    if min_x > j:
-                        min_x = j
-                    if min_y > k:
-                        min_y = k
-                    if max_x < j:
-                        max_x = j
-                    if max_y < k:
-                        max_y = k
                     result[j + bias_vertical, k + bias_horizontal, i] = 1
                     result_for_csv[j + bias_vertical, k + bias_horizontal] *= 2
                     result_for_csv[j + bias_vertical, k + bias_horizontal] += 1
-        print(min_x, min_y, max_x, max_y)
     show_result(result)
-    np.savetxt('result.csv', result_for_csv, '%d', ',')
+    np.savetxt('./result/result{}.csv'.format(output_size), result_for_csv, '%d', ',')
 
 
 if __name__ == '__main__':
